@@ -1,0 +1,16 @@
+register Janet
+register Joe
+register Jocelyn
+register Jim
+friend Janet Joe
+friend Joe Jocelyn
+separation Janet Janet
+separation Janet Joe
+separation Janet Jocelyn
+separation Janet Jim
+separation Jim Janet
+separation Jocelyn Janet
+separation Joe Janet
+dump
+unfriend Janet Joe
+dump
