@@ -33,7 +33,7 @@ int main (void){
 	}
 	printf("KEYS:\n");
 	int **keys = (int **) ht_keys(table);
-	for (int i=0; i< ht_count(table); i++){
+	for (unsigned int i=0; i< ht_count(table); i++){
 		printf("key #%d: %d\n",i, *keys[i]);
 	}
 	printf("Capacity: %d\n", ht_capacity(table));

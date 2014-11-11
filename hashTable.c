@@ -1,11 +1,21 @@
-//dag4202
+/**
+* hashTable.c
+* Dyangelo Grullon
+*
+* HashTable
+*
+* A Hash Table Implementation with flexible data processing, resizing capabilities and
+* unspecified hashing.Uses a seperate data type to hold nodes and a double pointer to 
+* said data type to hold the entire Hash Table. Uses open addressing for collision 
+* prevention.
+*/
 
 #include <stdlib.h>
 #include <assert.h>
 #include <stddef.h>
 #define HASH_ALLOC_UNIT 10
 
-
+//The data type used to hold a node in the Hash Table.
 typedef struct h_node {
 	void *key;
 	void *data;
@@ -37,7 +47,7 @@ HashTable ht_create(unsigned int (*hash)(const void *key, unsigned int size)){
 
 }
 
-int ht_contains(void *key, HashTable table){
+int ht_contains( void *key, HashTable table){
 	if (table->content==0){
 		return 0;
 	}
@@ -90,47 +100,56 @@ void ht_clear(HashTable table){
 
 }
 
-
-void ht_add(void *key, void *data, HashTable table){
-	assert(table!=0);
+static unsigned int getIndex(void *key, HashTable table){
 	unsigned int (*hash)(const void *key, unsigned int size) = table->hash;
-	unsigned int index;
-	if (table->content==0){
-		table->content = calloc(HASH_ALLOC_UNIT, sizeof(HashNode*));
-		table->capacity = HASH_ALLOC_UNIT;
-	} else if (((double)table->count)/(table->capacity)>= 0.7){
-		HashNode **tmp;
-		tmp = calloc((table->capacity + HASH_ALLOC_UNIT),sizeof(HashNode*));
-		for (unsigned int i = 0; i< table->capacity; i++){
-			if (table->content[i]!=0){
-				tmp[i] = table->content[i];
-			}
-		}
-		free(table->content);
-		table->content = tmp;
-		table->capacity += HASH_ALLOC_UNIT;
-	}
-	index = hash(key, table->capacity);
+	int index = hash(key, table->capacity);
 	while(table->content[index]!=0){
 		if (table->content[index]->key!=key){
 			index = (index+1) % table->capacity;
 		} else {
-			break;
+			return index;
 		}
 	}
+	return index;
+
+}
+
+int ht_add( void *key, void *data, HashTable table){
+	assert(table!=0);
+	unsigned int index;
+	if (table->content==0){ //Empty and Uninitialized content field.
+		table->content = calloc(HASH_ALLOC_UNIT, sizeof(HashNode*));
+		table->capacity = HASH_ALLOC_UNIT;
+	} 
+	if (((double)table->count)/(table->capacity)>= 0.7){ //Threshold to reduce load factor
+		HashNode **tmp;
+		tmp = calloc((table->capacity + HASH_ALLOC_UNIT),sizeof(HashNode*));
+		table->capacity += HASH_ALLOC_UNIT;
+		for (unsigned int i = 0; i< (table->capacity - HASH_ALLOC_UNIT); i++){
+			if (table->content[i]!=0){
+				index = getIndex(table->content[i]->key, table);
+				tmp[index] = table->content[i];
+			}
+		}
+		free(table->content);
+		table->content = tmp;
+	}
+	index = getIndex(key, table);
 	if  (table->content[index] == 0){
 		HashNode *node = malloc(sizeof(HashNode));
 		node->key = key;
 		node->data = data; 
 		table->content[index] = node;
 		table->count+=1;
+		return 1;
 	} else {
 		table->content[index]->data = data;
+		return 0;
 	}
 }
 
 
-int ht_remove( void *key, HashTable table){
+void *ht_remove( void *key, HashTable table){
 	assert(table!=0);
         unsigned int (*hash)(const void *key, unsigned int size) = table->hash;
         unsigned int index = hash(key, table->capacity);
@@ -142,20 +161,21 @@ int ht_remove( void *key, HashTable table){
                         break;
                 }
                 if (index==start){
-                        return -1;
+                        return NULL;
                 } 
         }
         if (table->content[index] == 0){
-                return -1;
+                return NULL;
         }
+	void *data = table->content[index]->data;
 	free(table->content[index]);
-	table->content[index] = 0;
+	table->content[index]= 0;
 	table->count -=1;
-	return 1;
+	return data;
 }
 
 
-void *ht_get(void *key, HashTable table){
+void *ht_get( void *key, HashTable table){
 	assert(table!=0);
         unsigned int (*hash)(const void *key, unsigned int size)= table->hash;
         unsigned int index = hash(key, table->capacity);
@@ -180,7 +200,7 @@ void **ht_keys(HashTable table){
 	if (table->content == 0){
 		return NULL;
 	}
-	void **keys = malloc(table->count * sizeof(void *));
+	void **keys = (void **)malloc(table->count * sizeof(void *));
 	unsigned int count = 0;
 	for (unsigned int i = 0; i< table->capacity; i++){
 		if (table->content[i] != 0){

@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <stdint.h>
 #include "hashTable.h"
 #include "queue.h"
 
@@ -23,19 +24,44 @@ typedef struct user_graph {
 
 static UserGraph graph;
 
-
-unsigned int UserHash(const void *key, unsigned int size){
-	return (*((int *) key) % size);
-
+/**
+* Uses Cyclic Redundancy Check (CRC to create a unique hash value based on 
+* individual characters in the key given and the size of the hashTable.
+*/
+unsigned int CRCHash(const void *key, unsigned int size){
+	const char *tmp = (const char *)key;
+	int Bytes;
+	char *name = (char *)malloc((Bytes=strlen(key)+1));
+	strcpy(name, tmp);
+	uint8_t result = 0;
+	uint8_t divisor = 0xD5; // standard for CRC-8
+	
+	for (int i = 0; i<Bytes; ++i){
+		result ^=(name[i]); //also initializes result to first letter
+		for(uint8_t letter = 8; letter>0; --letter){
+			if(result & 128){ //if first bit in result is 1
+				result = (result << 1)^divisor;// divisor can divide
+			} else {
+				result = (result << 1); //divisor can't divide it
+			}
+		}
+		
+	}
+	unsigned int hash = (unsigned int) result;
+	free(name);
+	return ((hash*hash) %size);
+	
 }
 
 void create_amigonet(){
 	graph = (UserGraph)malloc(sizeof(struct user_graph));
-	graph->users = ht_create(UserHash);
+	graph->users = ht_create(CRCHash);
 	graph->userCount = 0;
 }
-
-void destroy_User(User *user){
+/**
+* Frees a user and their amigos
+*/
+static void destroy_User(User *user){
 	assert(user!=0);
 	if(user->amigos!=0){
 		ht_destroy(user->amigos->userAmigos);
@@ -44,7 +70,10 @@ void destroy_User(User *user){
 	free(user);
 }
 
-void destroy_Users(){
+/**
+* Finds all users and frees them.
+*/
+static void destroy_Users(){
 	char **names = (char **)ht_keys(graph->users);
 	User *user;
 	for (unsigned int i = 0; i<ht_count(graph->users); i++){
@@ -84,7 +113,7 @@ void addUser( const char *name ){
 	person->name = UserName;
 	person->amigos = (Friends)malloc(sizeof(struct Friends_struct));
 	Friends friends = person->amigos;
-	friends->userAmigos = ht_create(UserHash);
+	friends->userAmigos = ht_create(CRCHash);
 	friends->amigoCount = 0;
 	ht_add((void *)person->name, (void *)person, graph->users);
 	graph->userCount+=1;
@@ -126,12 +155,18 @@ void removeAmigo( User *user, User *ex_amigo ){
 	}
 }
 
+/**
+*Encapsulates a user to include degree of seperation from a source.
+*/
 typedef struct queue_node {
 	User *user;
 	size_t distance;
 } *AmigoNode;
 
-AmigoNode amig_create(User *user, size_t distance){
+/**
+* The init method for an AmigoNode. Allocates memory.
+*/
+static AmigoNode amig_create( User *user, size_t distance){
 	AmigoNode node = (AmigoNode) malloc(sizeof(struct queue_node));
 	node->user = user;
 	node->distance = distance;
@@ -145,12 +180,12 @@ size_t separation( const User *user1, const User *user2 ){
 	char **names;
 	size_t seperation = 0;
 	Queue queue = que_create();
-	HashTable visited = ht_create(UserHash);
+	HashTable visited = ht_create(CRCHash);
 	AmigoNode toVisit = amig_create(user, seperation);
 
-	ht_add((void *)user->name, (void *) user, visited);
+	ht_add((void *)user->name, ( void *) user, visited);
 	que_push((void *) toVisit, queue);
-	
+
 	while(!que_isEmpty(queue)){
 		if((check = (AmigoNode)que_pop(queue))->user == user2){
 			seperation = check->distance;
@@ -171,13 +206,13 @@ size_t separation( const User *user1, const User *user2 ){
 				if (!ht_contains((void *)names[i], visited)){
 					user = (User *) ht_get((void *) names[i], 
 						adjacent->userAmigos);
-					ht_add((void *)names[i], (void *)user, visited);
+					ht_add(( void *)names[i], ( void *)user, visited);
 					toVisit = amig_create(user, seperation);
 					que_push((void *) toVisit, queue);  
 				}
 			}
 			free(names);
-		}	
+		}
 	}
 	que_destroy(queue);
 	ht_destroy(visited);
@@ -193,7 +228,7 @@ void dump_data(){
 		printf("\n");
 		for (unsigned int i = 0; i<graph->userCount; i++){
 			user = (User *)ht_get((void *) names[i], graph->users);
-			printf("%s; friends:", user->name);
+			printf("User %s; friends:", user->name);
 			amigos = (char **)ht_keys(user->amigos->userAmigos);
 			for (unsigned int j=0; j < user->amigos->amigoCount; j++){
 				printf(" %s", amigos[j]);
